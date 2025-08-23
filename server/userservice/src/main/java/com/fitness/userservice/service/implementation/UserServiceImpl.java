@@ -43,10 +43,21 @@ public class UserServiceImpl implements UserService {
     public UserResponse registerUser(RegisterRequest request) {
         try {
             if (userRepository.existsByEmail(request.getEmail())) {
-                throw new RuntimeException("User already exists");
+                User existingUser = userRepository.findByEmail(request.getEmail());
+                UserResponse userResponse = new UserResponse();
+                userResponse.setId(existingUser.getId());
+                userResponse.setKeyCloakId(existingUser.getKeyCloakId());
+                userResponse.setEmail(existingUser.getEmail());
+                userResponse.setPassword(existingUser.getPassword());
+                userResponse.setFirstName(existingUser.getFirstName());
+                userResponse.setLastName(existingUser.getLastName());
+                userResponse.setCreatedAt(existingUser.getCreatedAt());
+                userResponse.setUpdatedAt(existingUser.getUpdatedAt());
+                return userResponse;
             }
 
             User user = new User();
+            user.setKeyCloakId(request.getKeyCloakId());
             user.setEmail(request.getEmail());
             user.setPassword(request.getPassword()); 
             user.setFirstName(request.getFirstName());
@@ -56,6 +67,7 @@ public class UserServiceImpl implements UserService {
 
             UserResponse userResponse = new UserResponse();
             userResponse.setId(savedUser.getId());
+            userResponse.setKeyCloakId(savedUser.getKeyCloakId());
             userResponse.setEmail(savedUser.getEmail());
             userResponse.setPassword(savedUser.getPassword());
             userResponse.setFirstName(savedUser.getFirstName());
@@ -74,7 +86,7 @@ public class UserServiceImpl implements UserService {
     public Boolean validateUser(String userId) {
         try {
             log.info("Calling User Validation API for userId: {}", userId);
-            return userRepository.existsById(userId);
+            return userRepository.existsByKeyCloakId(userId);
         } catch (Exception e) {
             log.error("Error validating user: {}", e.getMessage()); 
             throw new RuntimeException("User validation failed");

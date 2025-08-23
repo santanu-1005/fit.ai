@@ -1,0 +1,8 @@
+# Application configuration for AI Service
+
+spring:
+    application:
+        name: ai-service
+    
+    config:
+        import: optional:configserver:http://localhost:8888

@@ -3,6 +3,8 @@
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fitness.activityservice.dto.ActivityRequest;
@@ -13,23 +15,32 @@ import com.fitness.activityservice.service.ActivityService;
 import com.fitness.activityservice.service.UserValidationService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ActivityServiceImpl implements ActivityService {
     private final ActivityRepository activityRepository;
     private final UserValidationService userValidationService;
+    private final RabbitTemplate rabbitTemplate;
+
+    @Value("${rabbitmq.exchange.name}")
+    private String exchange;
+
+    @Value("${rabbitmq.routing.key}")
+    private String routingKey;
 
     @Override
-    public ActivityResponse trackActivity(ActivityRequest request) {
+    public ActivityResponse trackActivity(ActivityRequest request, String userId) {
         try {
-            Boolean isValidUser = userValidationService.validateUser(request.getUserId());
+            Boolean isValidUser = userValidationService.validateUser(userId);
             if(!isValidUser){
-                throw new RuntimeException("Invalid User" + request.getUserId());
+                throw new RuntimeException("Invalid User" + userId);
             }
             
             Activity activity = Activity.builder()
-                    .userId(request.getUserId())
+                    .userId(userId)
                     .type(request.getType())
                     .duration(request.getDuration())
                     .caloriesBurned(request.getCaloriesBurned())
@@ -39,10 +50,12 @@ public class ActivityServiceImpl implements ActivityService {
 
             Activity savedActivity = activityRepository.save(activity);
 
+            // Publish to RabbitMQ for AI Processing
+            publishToRabbitMQ(savedActivity);
+
             return convertToResponse(savedActivity);
         } catch (Exception e) {
-            System.err.println("Error while tracking activity: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error while tracking activity: {}", e.getMessage());
             throw new RuntimeException("Failed to track activity", e);
         }
     }
@@ -90,4 +103,11 @@ public class ActivityServiceImpl implements ActivityService {
         return response;
     }
 
+    private void publishToRabbitMQ(Activity activity){
+        try {
+            rabbitTemplate.convertAndSend(exchange, routingKey, activity);
+        } catch (Exception e) {
+            log.error("Failed to publish activity to RabbitMQ: {}", e.getMessage());
+        }
+    }
 }
